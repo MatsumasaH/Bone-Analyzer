@@ -1,34 +1,33 @@
-# ターゲットが外部オブジェクトの場合バグるので修正/修正済み
+# Back Log #############################################################################################################
 # 大きさが小さいボーンを探す
 # Chiled == 0 and Being Targeted == 0 のボーンを探す
+########################################################################################################################
+
+# Development Tips #####################################################################################################
+# from dev import *
+# r = lambda: i.reload(ab)
+# r()
+########################################################################################################################
 
 import bpy
 from bpy.props import *
-import bmesh
-import mathutils
+# import bmesh
+# import mathutils
 
-# ここも、不完全なので、あとで直す
-# サイトにまとめたりする
 bl_info = {
     "name": "Bone Analyzer",
     "category": "3D View",
     "description": "Set short cut key for in like Q"
 }
 
-# Enumを返す。動的ではないが、その場で作る
+
 def type_call_back(self, context):
-    type = ["CAMERA_SOLVER", "FOLLOW_TRACK", "OBJECT_SOLVER", "COPY_LOCATION", "COPY_ROTATION", "COPY_SCALE",
-            "COPY_TRANSFORMS", "LIMIT_DISTANCE", "LIMIT_LOCATION", "LIMIT_ROTATION", "LIMIT_SCALE", "MAINTAIN_VOLUME",
-            "TRANSFORM", "CLAMP_TO", "DAMPED_TRACK", "IK", "LOCKED_TRACK", "SPLINE_IK", "STRETCH_TO", "TRACK_TO",
-            "ACTION", "CHILD_OF", "FLOOR", "FOLLOW_PATH", "PIVOT", "RIGID_BODY_JOINT", "SHRINKWRAP"]
-    items = []
-    counter = 1
-    for i in type:
-        # identifier, name, description, number
-        u = (i, i, "", counter)
-        counter += 1
-        items.append(u)
-    return items
+    types = ["CAMERA_SOLVER", "FOLLOW_TRACK", "OBJECT_SOLVER", "COPY_LOCATION", "COPY_ROTATION", "COPY_SCALE",
+             "COPY_TRANSFORMS", "LIMIT_DISTANCE", "LIMIT_LOCATION", "LIMIT_ROTATION", "LIMIT_SCALE", "MAINTAIN_VOLUME",
+             "TRANSFORM", "CLAMP_TO", "DAMPED_TRACK", "IK", "LOCKED_TRACK", "SPLINE_IK", "STRETCH_TO", "TRACK_TO",
+             "ACTION", "CHILD_OF", "FLOOR", "FOLLOW_PATH", "PIVOT", "RIGID_BODY_JOINT", "SHRINKWRAP"]
+    return [(i, i, "", counter + 1) for counter, i in enumerate(types)]
+
 
 class BoneAnalyzer(bpy.types.Operator):
     """Analyze Bone"""  # blender will use this as a tooltip for menu items and buttons.
@@ -95,41 +94,31 @@ def to_edit_mode(name):
 bone_dict = {}
 
 
-# ディクショナリーオブジェクトを作成
-# key   : bone name
-# value : driver information
 def driver(t_bone_dict):
+    """Create Dict Array for Drivers for each Bone"""
+    animation_data = bpy.context.object.animation_data
+
+    if hasattr(animation_data, "drivers") is False:
+        return
+
     for bone in bpy.context.object.pose.bones:
-        found_drivers = []
-        if hasattr(bpy.context.object.animation_data, "drivers") is not False:
-            for d in bpy.context.object.animation_data.drivers:
-                # pose.bones["Bone.002"].scale
-                if ('"%s"' % bone.name) in d.data_path:
-                    found_drivers.append(d)
-
-            if found_drivers:
-                t_bone_dict[bone.name] = found_drivers
+        found_drivers = [d for d in animation_data.drivers if ('"%s"' % bone.name) in d.data_path]
+        if found_drivers:
+            t_bone_dict[bone.name] = found_drivers
 
 
-def driver_targets(input_pose_bone):
-    # return value
+def driver_targets(bone_name):
+    """Return Target Bone Name List"""
     targets = []
-    # bone name
-    bone_name = input_pose_bone
     if bone_name in bone_dict.keys():
-        # Driver Array
-        active_bone_drivers = bone_dict[bone_name]
-        for d in active_bone_drivers:
-            # Driver
+        for d in bone_dict[bone_name]:
             for var in d.driver.variables:
-                # Variables
                 for target in var.targets:
-                    # Target
                     if target.data_path != "":
-                        # pose.bones["Bone.002"].scale
-                        # pose.bones["thigh.fk.R"]["stretch_length"]
-                        print(target.data_path.split('"')[1])
                         targets.append(target.data_path.split('"')[1])
+    for i in targets:
+        print(i)
+
     return targets
 
 
@@ -239,8 +228,13 @@ def select_def_bones():
 # ここで、Damped Trackがついているものを選択する
 # いや、ここで、色々な種類のコンストレイントを選べるようにする
 # enum型を使う感じで
+# 現在選択しているボーンは関係ない
 def select_constraint_bone(self):
     print(self.my_enum)
+
+    for bone in bpy.context.object.pose.bones:
+        bpy.context.object.data.bones[bone.name].select = False
+
     for bone in bpy.context.object.pose.bones:
         for con in bone.constraints:
             if con.type == self.my_enum:
@@ -259,8 +253,16 @@ def unregister():
     bpy.utils.unregister_class(BoneAnalyzer)
     bpy.types.VIEW3D_MT_pose_specials.remove(menu_draw)
 
+def test():
+    print('XXXXXXXXX')
 
-register()
-if __name__ == "__main__":
+try:
+    unregister()
+except:
+    print('Tried Unregistering. Module is Not Registered')
+finally:
     register()
+
+# if __name__ == "__main__":
+#     register()
 
