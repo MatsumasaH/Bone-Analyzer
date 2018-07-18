@@ -1,0 +1,195 @@
+#Have to change the name of the class
+
+import bpy
+from bpy.props import *
+import bmesh
+import mathutils
+
+bl_info = {
+    "name": "Bone Analyzer",
+    "category": "3D View",
+    "description": "Set short cut key for in like Q"
+    }
+
+class BoneAnalyzer(bpy.types.Operator):
+    
+    #Tool informations--------------------------------------------------------------------------------
+    """Analyze Bone"""      # blender will use this as a tooltip for menu items and buttons.
+    bl_idname = "object.boneanalyzer"        # unique identifier for buttons and menu items to reference.
+    bl_label = "Analyze Bone"         # display name in the interface.
+    bl_options = {'REGISTER', 'UNDO'}  # enable undo for the operator.
+    #-------------------------------------------------------------------------------------------------
+    
+    #Options after excuted the tool
+    #you can add by making class instance or by excuting class or something------------------------------
+    my_c =   bpy.props.BoolProperty(name="Child")
+    my_p =   bpy.props.BoolProperty(name="Parent")
+    my_tt =   bpy.props.BoolProperty(name="Targeting to")
+    my_bt =   bpy.props.BoolProperty(name="Being Targeted")
+    #-----------------------------------------------------------------------------------------------------
+    @classmethod
+    def poll(cls, context):
+        return bpy.context.selected_pose_bones is not None
+    
+    def execute(self, context):        # execute() is called by blender when running the operator.
+        
+        print("Starting Script...")
+        
+        AnalyzeBone(self)
+        
+        # trigger viewport update---------------------------------------------------------
+        bpy.context.scene.objects.active = bpy.context.scene.objects.active
+        #--------------------------------------------------------------------------------
+        
+        print("End of Script...")
+        
+        return {'FINISHED'}            # this lets blender know the operator finished successfully.
+
+#To edit mode--------------------------------------------------------------------------
+def ToEditMode(name):
+    bpy.ops.object.mode_set(mode = 'OBJECT')
+    for element in bpy.context.selected_objects:element.select = False
+    bpy.context.scene.objects.active = bpy.data.objects[name]
+    bpy.data.objects[name].select = True
+    bpy.ops.object.mode_set(mode = 'EDIT')
+#---------------------------------------------------------------------------------------
+
+#Wrapper----------------------------------
+def AnalyzeBone(self):
+    if self.my_c == True:
+        SelectChild()
+    if self.my_p == True:
+        SelectParent()
+    if self.my_tt == True:
+        SelectTargetingBones()
+    if self.my_bt == True:
+        SelectBonesTargetingSelf()
+#-----------------------------------------
+
+#--------------------------------------------------------
+def FindBonesTargetingTo():
+    Driver(boneDict);
+    for bone in bpy.context.object.data.bones:
+        for target in DriverTargets(bone.name):
+            if target == bpy.context.active_bone.name:
+                bone.select = True
+#--------------------------------------------------------
+
+#----------------------------------------------------------------------    
+def SelectDriverTarget():
+    Driver(boneDict);
+    for target in DriverTargets(bpy.context.active_bone.name):
+        bpy.context.object.data.bones[target].select = True
+#----------------------------------------------------------------------
+
+#for speeding up-------------------
+boneDict = {}
+#----------------------------------
+
+#---------------------------------------------------------------------------------------------
+def Driver(boneDict):
+    for bone in bpy.context.object.pose.bones:
+        foundDrivers = []
+        for d in bpy.context.object.animation_data.drivers:
+            #pose.bones["Bone.002"].scale
+            if ('"%s"' % bone.name) in d.data_path:
+                foundDrivers.append(d)
+
+        if foundDrivers:
+            boneDict[bone.name] = foundDrivers
+#--------------------------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------------------------------------
+def DriverTargets(InputPoseBone):
+    #return value
+    targets = []
+    #bone name
+    boneName = InputPoseBone
+    if boneName in boneDict.keys():
+        #Driver Array
+        activeBoneDrivers = boneDict[boneName]
+        for d in activeBoneDrivers:
+            #Driver
+            for var in d.driver.variables:
+                #Variables
+                for target in var.targets:
+                    #Target
+                    if target.data_path != "":
+                        #pose.bones["Bone.002"].scale
+                        targets.append(target.data_path.split('"')[1])
+    return targets
+#-----------------------------------------------------------------------------------------------
+
+#----------------------------------------------------------------------------
+#simple
+def SelectParent():
+    #Parent Bone------------------------------------------------
+    if bpy.context.active_pose_bone.parent != None:
+        name = bpy.context.active_pose_bone.parent.name
+        bpy.context.object.data.bones[name].select = True
+    #----------------------------------------------------------
+#----------------------------------------------------------------------------
+    
+#------------------------------------------------------------------------------------
+#simple
+def SelectChild():
+    #Children----------------------------------------------------------------
+    sname = bpy.context.active_pose_bone
+    for bone in bpy.context.object.pose.bones:
+        if bone.parent != None:
+            if bone.parent.name == sname.name:
+                print(bone.parent)
+                bpy.context.object.data.bones[bone.name].select = True
+    #------------------------------------------------------------------------- 
+#------------------------------------------------------------------------------------
+
+#-------------------------------------------------------------------------------
+#Simple
+def SelectBonesTargetingSelf():
+    #Select bones that are targeting self---------------------------
+    bonename = bpy.context.active_pose_bone.name;
+    bonelist = []
+    for bone in bpy.context.object.pose.bones:
+        for constraint in bone.constraints:
+            if hasattr(constraint,'subtarget'):
+                if constraint.subtarget == bonename:
+                    bonelist.append(bone)
+    for bone in bonelist:
+        print(bone.name)
+        bpy.context.object.data.bones[bone.name].select = True
+    #----------------------------------------------------------------
+#-----------------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------------------
+#Simple
+def SelectTargetingBones():
+    #Select bones that It is targeting--------------------------------------
+    bonename = bpy.context.active_pose_bone.name;
+    bonelist = []
+    for constraint in bpy.context.active_pose_bone.constraints:
+        if hasattr(constraint,'subtarget'):
+            bonelist.append(constraint.subtarget)
+    for bone in bonelist:
+        print(bone)
+        bpy.context.object.data.bones[bone].select = True
+    #------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------
+
+#for menu to draw
+def menu_draw(self, context):
+    self.layout.operator("object.boneanalyzer")
+
+def register():
+    bpy.utils.register_class(BoneAnalyzer)
+    bpy.types.VIEW3D_MT_pose_specials.append(menu_draw)
+    
+def unregister():
+    bpy.utils.unregister_class(BoneAnalyzer)
+    bpy.types.VIEW3D_MT_pose_specials.remove(menu_draw)
+
+#-------------------------------------------------------------------------------------
+# This allows you to run the script directly from blenders text editor
+# to test the addon without having to install it.
+if __name__ == "__main__":
+    register()
+#-------------------------------------------1------------------------------------------
